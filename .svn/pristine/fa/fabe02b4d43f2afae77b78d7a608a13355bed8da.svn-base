@@ -16,11 +16,10 @@ import pickle
 import optimize
 import send
 import csv
-import pointgroup as pg
 
 class io:
 	""" This class will write and overwrite an input file for quantum espresso pw.x scf calculations"""
-	def __init__(self, project, eCutWfc = 30, eCutRho = 120, a = 6.48, kxyz = [6,6,6], ibrav=0, mpi = False, nbnd=False, cellParams=[]):
+	def __init__(self, project, eCutWfc = 30, eCutRho = 120, a = 6.48, kxyz = [6,6,6], ibrav=2, mpi = False, nbnd=False, cellParams=False):
 		self.project = project
 		self.bohr2ang = 0.529177
 		self.ry2ev = 13.605693
@@ -28,18 +27,16 @@ class io:
 		self.pgmDir = config.system.pgmDir
 		self.pseudoDir = config.system.pseudoDir
 		self.workingDir = os.path.join(self.qeDir, 'projects', self.project)
-		self.structureDir = os.path.join(self.qeDir, 'structures')
 		self.outdir = os.path.join(self.workingDir, 'results')
 		self.logPath = os.path.join(self.workingDir, 'message.log')
 		self.prefix = '%s-res' % self.project
 		self.mpi = mpi
 		self.ibrav = ibrav
+		self.cellParams = cellParams
 		self.eCutWfc = eCutWfc
 		self.eCutRho = eCutRho
+		self.elements = {}
 		self.atoms = []
-		self.crystal = pg.Crystal()
-		for v in cellParams:
-			self.crystal.addTranslation(v)
 		self.ipFile = os.path.join(self.workingDir, 'scf-ip')
 		self.kxyz = kxyz
 		self.a = a / self.bohr2ang
@@ -55,53 +52,58 @@ class io:
 		self.startingpot = False
 		self.startingwfc = False
 		self.restart = False
+		if not os.path.isdir(self.workingDir):
+			try:
+				os.mkdir(self.workingDir)
+			except:
+				print 'Error creating project directory\n'
+				print 'Error data:'+sys.exc_info()
 		self.rmExitFile()
-		self.initDirs()
-	def addElement(self,symbol,mass=False,pseudoFile=False):
+		if self.ibrav == 0 and not self.cellParams:
+			raise Exception("You must manually enter cell tranlation vectors (cellParams) when using the free lattice (ibrav = 0). Set cellParams to a 3 element list of three element cartesian translation vectors (floats). ")
+	def addElement(self,symbol,mass,pseudoFile):
 		"""Add a reference for an element and it's corresponsing pseudopotential file. Mass in A.U. must also be entered"""
-		self.crystal.addElement(symbol,mass,pseudoFile)
-		if pseudoFile:
-			if not os.path.isfile(os.path.join(self.pseudoDir,pseudoFile)):
-					print 'Pseudopotential file not located. There must be a pseudopotential file of UPF format located in the Quantum Espresso pseudo directory'
-					return False
+		self.elements[symbol] = {}
+		self.elements[symbol]['mass'] = mass
+		self.elements[symbol]['pseudoFile'] = pseudoFile
+		if not os.path.isfile(os.path.join(self.pseudoDir,pseudoFile)):
+			print 'Pseudopotential file not located. There must be a pseudopotential file of UPF format located in the Quantum Espresso pseudo directory'
+			return False
 		self.renumber()
-	def setA(self, a):
-		self.a = a / self.bohr2ang
-	def addAtom(self,symbol,position,forceX=[1,1,1]):
+	def addAtom(self,symbol,position):
 		"""Adds a single atom of defined by symbol(element) and x,y,z position list in units of self.a"""
 		if symbol not in self.elements:
 			print 'That element has not yet been defined. Define elements using the addElement method'
 			return False
-		self.crystal.addAtom(symbol, position, forceX)	
-		#self.atoms.append([symbol,position[0],position[1],position[2]])
+		self.atoms.append([symbol,position[0],position[1],position[2]])
 		self.renumber()
-	def addAtoms(self, atoms):
-		for atom in atoms:
-			self.addAtom(atom[0],atom[1],atom[2])
-	def importStructure(self, path, directory=False, format=None, index=None):
+	def importAtomFile(self,filename):
 		"""Clears all atoms and add atoms according to the filename file with a json format corresponding to an array of arrays, each with 4 elements like [element symbol, x, y, z] where x,y,z are in units of self.a"""
-		directory = directory if directory else self.structureDir
-		path = os.path.join(directory,path)
-		if not os.path.isfile(path):
+		if not os.path.isfile(filename):
 			print 'Cannot find atoms file.'
 			return False
-		if format == 'json':
-			structure = json.loads(open(path,'r').read())
-			self.crystal.basis = structure['basis']
-			self.crystal.translations = structure['translations']
-		else:
-			self.crystal.importStructure(path,format=format, index=index)
-			self.setA(self.crystal.a)
+		self.atoms = json.loads(open(filename,'r').read())
 		self.renumber()
-	def exportAtoms(self, importPath, importFormat, exportName, exportFormat='cif'):
-		"""Export cell and atom info. importFormat will be either espresso-out or espresso-in"""
-		exportPath = os.path.join(self.structureDir,exportName)
-		self.crystal.exportStructure(importPath, importFormat=importFormat, index=None, exportPath=exportPath, exportFormat=exportFormat)
+	def exportAtoms(self, dir = 'atomfiles', filename = 'atoms.atoms'):
+		if len(self.atoms) > 0:
+			opDir = os.path.join(self.workingDir,dir)
+			filepath = os.path.join(opDir,filename)
+			if not os.path.isdir(opDir):
+				try:
+					os.mkdir(opDir)
+				except:
+					print 'Error creating project directory\n'
+					print 'Error data:'+str(sys.exc_info())
+					return
+			file = open(filepath,'w+')
+			file.truncate()
+			file.write(json.dumps(self.atoms))
+			file.close()
 	def renumber(self):
 			typArr = []
 			tmpNat = 0
 			tmpNtyp = 0
-			for atom in self.crystal.basis:
+			for atom in self.atoms:
 				tmpNat += 1
 				if atom[0] not in typArr:
 					typArr.append(atom[0])
@@ -109,13 +111,6 @@ class io:
 			self.nat = tmpNat
 			self.ntyp = tmpNtyp
 	def write(self):
-		if self.ibrav == 0 and len(self.crystal.translations) == 0:
-			raise Exception("You must manually enter cell tranlation vectors (cellParams) when using the free lattice (ibrav = 0). Set cellParams to a 3 element list of three element cartesian translation vectors (floats). ")
-		for symbol, element in self.crystal.elements.iteritems():
-			if 'pseudoFile' not in element:
-				raise Exception("You must supply a valid pseudopotential file for every element. Use qeio.addElement(symbol, pseusofile=[PSEUDOFILE NAME]) providing a name of a UPF file in the directory qeio.pseudoDir")
-			if 'mass' not in element:
-				raise Exception("You must supply a valid pseudopotential file for every element. Use qeio.addElement(symbol, mass=[ELEMENT MASS]) to add the mass value in AMU")
 		inputFile = open(self.ipFile,'w+')
 		inputFile.truncate()
 		inputFile.write(" &CONTROL\n")
@@ -151,17 +146,18 @@ class io:
 				inputFile.write(" &CELL\n")
 				inputFile.write(" /\n")
 		inputFile.write("ATOMIC_SPECIES\n")
-		for symbol,data in self.crystal.elements.iteritems():
+		for symbol,data in self.elements.iteritems():
 			inputFile.write(" %s %f %s\n" % (symbol, data['mass'], data['pseudoFile']))
 		inputFile.write("ATOMIC_POSITIONS alat\n")
-		for atom in self.crystal.basis:
-			inputFile.write(" %s %f %f %f %i %i %i\n" % (atom[0], atom[1][0], atom[1][1], atom[1][2], atom[2][0], atom[2][1], atom[2][2]))
+		for atom in self.atoms:
+			inputFile.write(" %s %f %f %f\n" % (atom[0], atom[1], atom[2], atom[3]))
 		inputFile.write("K_POINTS automatic\n")
 		inputFile.write("%d %d %d 0 0 0\n" % (self.kxyz[0], self.kxyz[1], self.kxyz[2]))
 		if self.ibrav == 0:
 			inputFile.write("CELL_PARAMETERS\n")
-			for v in self.crystal.translations:
-				inputFile.write(" %f %f %f\n" % (v[0], v[1], v[2]))
+			inputFile.write(" %f %f %f\n" % (self.cellParams[0][0],  self.cellParams[0][1], self.cellParams[0][2]))
+			inputFile.write(" %f %f %f\n" % (self.cellParams[1][0],  self.cellParams[1][1], self.cellParams[1][2]))
+			inputFile.write(" %f %f %f\n" % (self.cellParams[2][0],  self.cellParams[2][1], self.cellParams[2][2]))
 		if (self.calculation == 'relax' or self.calculation == 'vc-relax') and self.constraints:
 			inputFile.write("CONSTRAINTS\n")
 			if self.constraints == 'zb-bennett':
@@ -198,11 +194,7 @@ class io:
 			os.system(cmdStr)
 			self.appendData(opFilename)
 		else:
-			if config.system.os == 'Windows':
-				cmdStr = 'pw -i'
-			if config.system.os == 'Linux':
-				cmdStr = 'pw.x <'
-			os.system("%s %s > %s" % (self.pgmDir+'/'+cmdStr, self.ipFile, opFilename))
+			os.system("%s < %s > %s" % (self.pgmDir+'/pw.x', self.ipFile, opFilename))
 			self.appendData(opFilename)
 	def parseResults(self, dir, log=False):
 		"""Reads output files from an optimization, and creates an array of data"""
@@ -355,6 +347,9 @@ class io:
 			return False
 		for pt in pts:
 			y.append(pt['energy'])
+			print 'energy from point %i: %f' % (len(y), pt['energy'])
+			if len(y) > 1:
+				print 'energy change: %s' % str(y[-1] - y[-2])
 			x.append(pt[qeParam])
 			t.append(pt['wallTime'])
 		return self.fitConvergence(x, y, t, subDir, xLabel=qeParam+' Cutoff')
@@ -509,7 +504,6 @@ class io:
 		if os.path.isfile(importPath):
 			with open(importPath, 'r') as file:
 				dataList = json.loads(file.read())
-			print str(dataList)
 			with open(exportPath, 'w+') as file:
 				writer = csv.DictWriter(file, self.flattenData(dataList[0]).keys())
 				writer.writeheader()
@@ -528,13 +522,5 @@ class io:
 			else:
 				opDict[key] = dataPt[key]			
 		return opDict
-	def initDirs(self):
-		for path in [self.workingDir, self.structureDir]:
-			if not os.path.isdir(path):
-				try:
-					os.mkdir(path)
-				except:
-					print 'Error creating directory: %s' % path 
-					print 'Error data:'+sys.exc_info()
 			
 			

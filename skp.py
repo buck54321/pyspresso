@@ -8,6 +8,7 @@ from matplotlib.widgets import Slider, Button, RadioButtons
 
 pi = np.pi
 
+pg.verbosity = 'teenage girl'
 crystal = pg.Crystal()
 crystal.addTranslation([1.0,0.0,0.0])
 crystal.addTranslation([0.0,1.0,0.0])
@@ -83,9 +84,9 @@ def updateA(val):
 	plt.draw()
 	
 Z = makeZ([1.0,1.0,0.0])	
-#kzAxes = plt.axes([0.25, 0.05, 0.65, 0.03])
-#kzSlider = Slider(kzAxes, 'a_m', 0.1, 4.0, valinit=kz, facecolor='k')
-#kzSlider.on_changed(updateA)
+kzAxes = plt.axes([0.25, 0.05, 0.65, 0.03])
+kzSlider = Slider(kzAxes, 'a_m', 0.1, 4.0, valinit=kz, facecolor='k')
+kzSlider.on_changed(updateA)
 
 
 # Plot the surface.

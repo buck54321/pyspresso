@@ -4,16 +4,12 @@ from random import randint
 import numpy.linalg as la
 import numpy as np
 import copy
-import re
-from ase import io as aseio
-import os 
 
 pi = np.pi
 xHat = np.array([1.0, 0.0, 0.0])
 yHat = np.array([0.0, 1.0, 0.0])
 zHat = np.array([0.0, 0.0, 1.0])
 zeroVector = np.array([0.0,0.0,0.0])
-verbosity = 'monk'
 
 class ArrayList():
 	"""Base class for lists of arrays, including some basic methods for adding arrays, adding information about the arrays, and referencing the arrays. """
@@ -26,7 +22,7 @@ class ArrayList():
 			print 'In order to add an element to an arrayList using addArray, you must provide a reference name and an array'
 			return False
 		self.dict[ref] = {'matrix':array}
-		for key, value in dataDict.iteritems():
+		for key, value in dataDict:
 			self.dict[ref][key] = value
 		self.update()
 	def arrays(self):
@@ -233,7 +229,7 @@ def Z(vectors):
 
 def seek(start, end, translations):
 	"""Given two points in space, attempt to crawl from one point to the other using only the moves given by the vectors in translations.
-	Return a list of points on the path taken"""
+	If you can reach the other point, return the path taken, otherwise return false."""
 	i=0
 	position = np.array(start)
 	end = np.array(end)
@@ -259,7 +255,7 @@ def seek(start, end, translations):
 		if i > 100:
 			print '100 move limit reached.'
 			return False
-	return path
+		return path
 
 
 def genOp(axis, op):
@@ -276,14 +272,14 @@ def genOp(axis, op):
 def genSymOps(opType, axis, order=False):
 	"""Generate a dictionary of matrices representing rotations about the given axis angles of n*(360/order) where n = 1,...,order. Dictionary keys are n."""
 	rots = {}
-	if opType == 'rotation' or opType == 'rotoinversion':
+	if opType is 'rotation' or opType is 'rotoinversion':
 		if not order:
 			print 'To generate a list of rotations with genSymOps(), you must provide a third argument indicating the order of the rotation'
 			return False
-		mOp = '-'+str(order) if opType == 'rotoinversion' else str(order)
+		mOp = '-'+str(order) if opType is 'rotoinversion' else str(order)
 		for n in range(1,order):
 			rots['[%i/%s]' % (n,mOp)] = la.matrix_power(genOp(axis,M.array(mOp)),n)
-	elif opType == 'reflection':
+	elif opType is 'reflection':
 		rots['m'] = genOp(axis,M.array('m'))
 	return rots
 
@@ -316,24 +312,30 @@ def findMatch(box, atom):
 	points = []
 	for point in box:
 		dist = distance(point[1],atom[1])
-		if point[0] == atom[0] and distance(point[1],atom[1]) < 1e-5:
+		if point[0] is atom[0] and distance(point[1],atom[1]) < 1e-5:
 			return True
+	'''
+		elif point[0] is atom[0] and dist < shortestDistance:
+			shortestDistance = dist
+			points = [atom,point]
+	print 'Failed to connect points: %s' % points
+	'''
 	return False	
 
 # M is a list of matrix representations of basic operations about the z-axis
 M = ArrayList()
-M.add('1', np.array([[1,0,0], [0,1,0], [0,0,1]]), {'order':1, 'type':'rotation'})
-M.add('-1', np.array([[-1,0,0], [0,-1,0], [0,0,-1]]), {'order':1, 'type':'rotoinversion'})
-M.add('2', np.array([[-1,0,0], [0,-1,0], [0,0,1]]), {'order':2, 'type':'rotation'})
-M.add('3', np.array([[-0.5,-0.5*np.sqrt(3),0], [0.5*np.sqrt(3),-0.5,0], [0,0,1]]), {'order':3, 'type':'rotation'})
-M.add('-3', np.array([[0.5,0.5*np.sqrt(3),0], [-0.5*np.sqrt(3),0.5,0], [0,0,-1]]), {'order':3, 'type':'rotoinversion'})
-M.add('4', np.array([[0,-1,0], [1,0,0], [0,0,1]]), {'order':4, 'type':'rotation'})
-M.add('-4', np.array([[0,1,0], [-1,0,0], [0,0,-1]]), {'order':4, 'type':'rotoinversion'})
-M.add('6', np.array([[0.5,-0.5*np.sqrt(3),0], [0.5*np.sqrt(3),0.5,0], [0,0,1]]), {'order':6, 'type':'rotation'})
-M.add('-6', np.array([[-0.5,0.5*np.sqrt(3),0], [-0.5*np.sqrt(3),-0.5,0], [0,0,-1]]), {'order':6, 'type':'rotoinversion'})
-M.add('m', np.array([[1,0,0], [0,1,0], [0,0,-1]]), {'order':1, 'type':'reflection'})
+M.add('1', np.array([[1,0,0], [0,1,0], [0,0,1]]))
+M.add('-1', np.array([[-1,0,0], [0,-1,0], [0,0,-1]]))
+M.add('2', np.array([[-1,0,0], [0,-1,0], [0,0,1]]))
+M.add('3', np.array([[-0.5,-0.5*np.sqrt(3),0], [0.5*np.sqrt(3),-0.5,0], [0,0,1]]))
+M.add('-3', np.array([[0.5,0.5*np.sqrt(3),0], [-0.5*np.sqrt(3),0.5,0], [0,0,-1]]))
+M.add('4', np.array([[0,-1,0], [1,0,0], [0,0,1]]))
+M.add('-4', np.array([[0,1,0], [-1,0,0], [0,0,-1]]))
+M.add('6', np.array([[0.5,-0.5*np.sqrt(3),0], [0.5*np.sqrt(3),0.5,0], [0,0,1]]))
+M.add('-6', np.array([[-0.5,0.5*np.sqrt(3),0], [-0.5*np.sqrt(3),-0.5,0], [0,0,-1]]))
+M.add('m', np.array([[1,0,0], [0,1,0], [0,0,-1]]))
 
-# pointGroups is a dictionary with basic information about the 32 point groups. Consider changing the structure of this to a custom class, or somehow changing it to an ArrayList obect
+
 pointGroups = {'1':{'symOps': False,
 			   'system':'triclinic',
 			   'order':1},
@@ -483,65 +485,23 @@ pointGroups = {'1':{'symOps': False,
 
 class Crystal:
 	"""Given a set of lattice translation vectors and a basis, this will return an object describing the lattice and reciprocal lattice."""
-	def __init__(self, translations=[], basis=[]):
+	def __init__(self, translations, basis):
 		self.translations = [np.array(v) for v in translations]
 		self.basis = [[b[0],np.array(b[1])] for b in basis]
-		self.cell = False
+		self.cell = self.fillCell()
 		self.directGroup = False
 		self.system = False
 		self.pgAxes = False
-		self.directOps = ArrayList()
-		self.directOps.add('1', M.array('1'))
+		self.pgOps = ArrayList()
 		self.pointGroup = False
-		self.box = False
-		self.a = False
-		self.elements = {}
-	def addElement(self,symbol,mass,pseudoFile=False):
-		"""Add a reference for an element and it's corresponsing pseudopotential file. Mass in A.U. must also be entered"""
-		if symbol not in self.elements:
-			self.elements[symbol] = {}
-		if mass:
-			self.elements[symbol]['mass'] = mass
-		if pseudoFile:
-			self.elements[symbol]['pseudoFile'] = pseudoFile
-	def addTranslation(self, t):
-		"""Add a translation vector"""
-		self.translations.append(np.array(t))
-		if len(self.translations) > 3:
-			print 'You have defined more than three translations vectors.'
-	def addAtom(self, element, v=[0.0,0.0,0.0], f=[1,1,1]):
-		"""Add a basis atom"""
-		self.basis.append([element, np.array(v), np.array(f)])
-		#self.fillCell()
-	def importStructure(self, path, index=None, format=None):
-		"""create a structure from a .cif file"""
-		structure = aseio.read(path, index=index, format=format)
-		translations = structure.get_cell()
-		self.a = la.norm(translations[0])
-		self.translations = [np.array((1/self.a)*v) for v in translations]
-		positions = structure.get_scaled_positions()
-		symbols = structure.get_chemical_symbols()
-		masses = structure.get_masses()
-		for i in range(len(positions)):
-			atom = positions[i]
-			cartesian = atom[0]*self.translations[0] + atom[1]*self.translations[1] + atom[2]*self.translations[2]
-			self.addAtom(symbols[i], cartesian)
-			if symbols[i] not in self.elements:
-				self.addElement(symbols[i], masses[i])
-	def exportStructure(self, importPath, importFormat, index=None, exportPath=False, exportFormat='cif'):
-		"""Export crystallographic structure to file using ase"""
-		structure = aseio.read(importPath, index=index, format=importFormat)
-		if exportPath:
-			aseio.write(exportPath, structure, format=exportFormat)
-			return True
-		else:
-			print 'You must provide a filepath for exporting'
-			return False
+		self.box = fillBox(self.translations, self.basis)
+	def fillCell(self):
+		atoms = []
+		for t in self.translations + zeroVector:
+			for b in self.basis:
+				atoms.append([b[0], t+b[1]])
+		return atoms
 	def findSystem(self):
-		"""Attempt to match the given crystal translations vectors to one of the seven crystal systems"""
-		if len(self.translations) < 3:
-			print 'Your crystal must have three translation vectors'
-			return False
 		v0, v1, v2 = self.translations
 		if np.absolute(np.dot(v0,v1)) > 1e-9 or np.absolute(np.dot(v1,v2)) > 1e-9 or np.absolute(np.dot(v0,v2)) > 1e-9: #if there is a non-right angle
 			if np.absolute(la.norm(v0) - la.norm(v1)) < 1e-9 or np.absolute(la.norm(v1) - la.norm(v2)) < 1e-9 or np.absolute(la.norm(v0) - la.norm(v2)) < 1e-9: # if any two sides are of equal length
@@ -614,58 +574,29 @@ class Crystal:
 			self.pgAxes = [[v0,v1,v2]]
 			self.pgAxes.append([v0+v1+v2, v1+v2-v0, v0+v2-v1, v0+v1-v2])
 			self.pgAxes.append([v0+v1, v0+v2, v1+v2])
-		if verbosity == 'teenage girl':
-			if self.system:
-				print 'Crystal matched to %s system' % self.system
-			else:
-				print 'Unable to identify crystal system'
-		return True
-	def checkOp(self, opDef, checkAll=False):
-		"""Check if the crystal is unchanged after given symmetry operation (op) about given axis"""
-		returnVal = True
-		for axisIndex, axis in enumerate(self.pgAxes[opDef['axis']]):
-			axisOps = ArrayList()
-			axisBool = True
-			for testName, testOp in genSymOps(opDef['type'], axis, opDef['order']).iteritems():
-				testName = '%s(%i.%i)' % (testName, opDef['axis'], axisIndex)
-				for atom in self.basis:
-					if not findMatch(self.box, [atom[0], seek(np.matmul(testOp, atom[1]), zeroVector, self.translations)[-1]]):
-						if not checkAll:
-							return False
-						returnVal = False
-						axisBool = False
-						break
-					axisOps.add(testName, testOp)
-			if axisBool:
-				for n,o in axisOps.dict.iteritems():
-					self.pgOps.blend(n, o['matrix'])
-					self.directOps.blend(n, o['matrix'])
-		return returnVal
-	def findPointGroup(self, checkAll=False):
-		"""Try to match the crystal to one of the 32 crystal point groups by checking symmetry operations. """
-		if len(self.basis) < 1:
-			print "You must add at least one basis atom"
+	def findPointGroup(self):
+		groupMatches = []
+		highestOrder = 0
+		if not self.system:
 			return False
-		system = self.findSystem()
-		if not system and not self.findSystem():
-			return False
-		self.box = fillBox(self.translations, self.basis)
-		numOps = 0
 		for name, pg in pointGroups.iteritems():
-			self.pgOps = ArrayList()
-			self.pgOps.add('1',M.array('1'))
-			if pg['system'] == self.system: 
+			tmpOps = ArrayList()
+			tmpOps.add('1',M.array('1'))
+			if pg['system'] is self.system:
 				match = True
-				if verbosity == 'teenage girl':
-					print 'checking point group %s' % name
+				print 'checking point group %s' % name
 				for opDef in pg['symOps']:
-					if not self.checkOp(opDef, checkAll=checkAll):
-						match = False
+					for axisIndex, axis in enumerate(self.pgAxes[opDef['axis']]):
+						for testName, testOp in genSymOps(opDef['type'], axis, opDef['order']).iteritems():
+							testName = '%s(%i.%i)' % (testName, opDef['axis'], axisIndex)
+							for newName, newOp in tmpOps.blend(testName, testOp).iteritems():
+								for atom in self.cell:
+									if not findMatch(self.box, [atom[0], seek(np.matmul(newOp, atom[1]), zeroVector, self.translations)[-1]]):
+										match = False
 				if match:
-					if pg['order'] > numOps:
-						numOps = self.pgOps.length
+					if pg['order'] > self.pgOps.length:
+						self.pgOps = copy.deepcopy(tmpOps)
 						self.pointGroup = name
-
 '''
 #Nickel Arsenide
 translations = np.array([[1.0, 0.0, 0.0],
@@ -674,22 +605,15 @@ translations = np.array([[1.0, 0.0, 0.0],
 basis = [['Ni',[0.0,0.0,0.0]], ['As',[0.5,0.5/np.sqrt(3),0.5]], ['As',[0,1.0/np.sqrt(3),0.5]]]
 '''
 
-
 #Cadmium Telluride
 translations = np.array([[1.0,0.0,0.0], [0.0,1.0,0.0], [0.0,0.0,1.0]])
 basis = [['Cd',[0.0,0.0,0.0]], ['Cd',[0.0,0.5,0.5]], ['Cd',[0.5,0.0,0.5]], ['Cd',[0.5,0.5,0.0]], ['Te',[0.25,0.25,0.25]], ['Te',[0.25,0.75,0.75]], ['Te',[0.75,0.25,0.75]], ['Te',[0.75,0.75,0.25]]]
-#with vacancy
-#basis = [['Cd',[0.0,0.0,0.0]], ['Cd',[0.0,0.5,0.5]], ['Cd',[0.5,0.0,0.5]], ['Cd',[0.5,0.5,0.0]], ['Te',[0.25,0.75,0.75]], ['Te',[0.75,0.25,0.75]], ['Te',[0.75,0.75,0.25]]]
-#with centered vacancy
-#basis = [['Cd',[0.0,0.5,0.5]], ['Cd',[0.5,0.0,0.5]], ['Cd',[0.5,0.5,0.0]], ['Te',[0.25,0.25,0.25]], ['Te',[0.25,0.75,0.75]], ['Te',[0.75,0.25,0.75]], ['Te',[0.75,0.75,0.25]]]
-
 
 '''
 #NaCl
 translations = np.array([[1.0,0.0,0.0], [0.0,1.0,0.0], [0.0,0.0,1.0]])
 basis = [['Na',[0.0,0.0,0.0]], ['Na',[0.0,0.5,0.5]], ['Na',[0.5,0.0,0.5]], ['Na',[0.5,0.5,0.0]], ['Cl',[0.5,0.0,0.0]], ['Cl',[0.5,0.5,0.5]], ['Cl',[1.0,0.0,0.5]], ['Cl',[1.0,0.5,0.0]]]
 '''
-
 '''
 #Si primitive cell
 translations = np.array([[1.0,0.0,0.0], [0.0,1.0,0.0], [0.0,0.0,1.0]])
@@ -702,22 +626,53 @@ for atom in vectors[1:]: # w/vacancy
 	basis.append(['Si',[x+0.25 for x in atom]])
 '''	
 
-if __name__ == '__main__':
-	crystal = Crystal()
-	#crystal.importStructure('C:/QuantumEspresso/structures/As.cif', format='cif')
-	crystal.exportStructure(r'C:\QuantumEspresso\projects\As-primitive\vc-relax-op\vc-relax', 'espresso-out', -1, r'C:\QuantumEspresso\structures\as-primitive_vc-relax-2.cif', exportFormat='cif')
-	'''
-	verbosity = 'teenage girl'
-	crystal = Crystal(translations, basis)
-	crystal.findPointGroup(checkAll=True)
-	if crystal.pointGroup:
-		print 'Crystal point group is %s' % crystal.pointGroup
-		print '%i symmetry operations found' % crystal.directOps.length
+crystal = Crystal(translations, basis)
+crystal.findSystem()
+print 'Crystal matched to %s lattice system' % crystal.system
+print '-------------------------------------------------------------'
+crystal.findPointGroup()
+print 'Crystal point group is %s' % crystal.pointGroup
+print '-------------------------------------------------------------'
+
+
+'''
+if crystal.pointGroup:
+	print 'Success! The point group for this crystal is %s' % crystal.pointGroup
+else:
+	print 'Point group match not found'
+print '%i symmetry operations found' % len(crystal.pgOps)
+'''
+
+'''
+start = [-2.0,0.5,0.0]
+end = [0.0,0.0,0.0]
+print str(seek(start, end, translations)[-1])
+'''
+
+'''
+op = genOp([1,0,0], M.array('m'))
+box = fillBox(translations, basis)
+#for atom in box:
+#	print atom
+for n in range(0,4):
+	v = basis[2]
+	print '%i-fold rotation' % n
+	print 'inital position: ' % v[1]
+	w = np.matmul(la.matrix_power(op,n),v[1])
+	print 'position: %s' % w
+	if findMatch(box, [v[0],w]):
+		print 'match found'
 	else:
-		print 'Crystal point group not found'
-		print '%i symmetry operations matched' % crystal.directOps.length
-	print '-------------------------------------------------------------'
-	'''
+		print 'failed'
+'''
+'''
+testList = ArrayList()
+for label, op in genSymOps('rotation',[0.0,1.0,0.0],3).iteritems():
+	testList.add(label, op)
+print (testList.blend('m',M.array('m')))
+'''
+
+
 
 '''
 plt.ion()
@@ -733,4 +688,23 @@ plt.show()
 raw_input('Press enter to continue.')
 '''
 
+
+
+
+
+
+
+'''
+path = seek([0.0, 0.0, 0.0], [6.5, 2.0, 3.5], translations)
+if path:
+	plt.ion()
+	fig = plt.figure()
+	ax = fig.add_subplot(111, projection='3d', xlabel='x', ylabel='y', zlabel='z')
+	#ax.scatter(X(vectors), Y(vectors), Z(vectors), s=100)
+	ax.plot(X(path), Y(path), Z(path))
+	plt.show()
+	raw_input('Press enter to continue.')
+else:
+	print 'Coincident site not found'
+'''
 	

@@ -4,11 +4,10 @@ class Subconfig(object):
 
 # System settings will be related to the computer or server that the quantum espresso code in running on.
 system = Subconfig()
-system.os = 'Windows' #For determining terminal commands
 system.hasDisplay = True # Setting to false will prevent plotting routines from trying to display figures
-system.qeDir = r'C:\QuantumEspresso' # The directory of the quantum espresso installation. 
-system.pgmDir = r'C:\QuantumEspresso\bin' # The bin directory of the quantum espresso installation
-system.pseudoDir = r'C:\QuantumEspresso\pseudo' # The directory where pseudopotential files are stored. 
+system.qeDir = '/home/buck54321/quantum-espresso' # The directory of the quantum espresso installation. 
+system.pgmDir = '/home/buck54321/quantum-espresso/files/bin' # The bin directory of the quantum espresso installation
+system.pseudoDir = '/home/buck54321/quantum-espresso/files/pseudo' # The directory where pseudopotential files are stored. 
 
 # qeBot can email you when certain calculations have completed. These email settings are the settings of your chosen SMTP server. 
 email = Subconfig()

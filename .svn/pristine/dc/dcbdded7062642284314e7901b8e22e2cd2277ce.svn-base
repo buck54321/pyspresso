@@ -111,7 +111,8 @@ def cutoffs(io, low, high, stepsize, qeParam, optParams, rhoRatio = 4):
 		io.log('Total time: %is' % data[-1]['wallTime'])
 		io.log('Date/time: %s' % data[-1]['dateTime'])
 		if testE > low:
-			deltaEV = data[-1]['energy'] - data[-2]['energy']
+			delta = data[-1]['energy'] - data[-2]['energy']
+			deltaEV = delta*ry2ev
 			io.log('%f eV change' % deltaEV)
 			if abs(deltaEV) < optParams.convEV:
 				if triggered:
@@ -175,7 +176,8 @@ def kGrid(io, startGrid, steps, optParams, stepsize = [2,2,2]):
 		io.log('Total time: %is' % data[-1]['wallTime'])
 		io.log('Date/time: %s' % data[-1]['dateTime'])
 		if i > 0:
-			deltaEV = data[-1]['energy'] - data[-2]['energy']
+			delta = data[-1]['energy'] - data[-2]['energy']
+			deltaEV = delta*ry2ev
 			io.log(str(deltaEV)+'eV change')
 			if abs(deltaEV) < optParams.convEV:
 				if triggered:
@@ -221,7 +223,6 @@ def relax(io, nstep, optParams, constraints = False, vc=False):
 			io.clearDir(subDir)
 		io.runPw(opFilename)
 		io.parseResults(subDir, log=calcType)
-	io.exportAtoms(opFilename, 'espresso-out', io.project+'-'+calcType+'.cif', exportFormat='cif')
 	io.constraints = False
 	io.calculation = 'scf'
 	if optParams.email or optParams.text:
